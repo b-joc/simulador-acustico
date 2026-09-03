@@ -1,0 +1,17 @@
+{
+  "source": "sax",
+  "fs": 44100,
+  "duration_s": 8.181814058956917,
+  "elapsed_s": 1.0196577000024263,
+  "config": {
+    "width_m": 18.0,
+    "length_m": 30.0,
+    "height_m": 7.5,
+    "absorption": 0.95,
+    "max_order": 3,
+    "source_power_db": 100.0,
+    "analysis_frequency_hz": 1000,
+    "temperature_c": 20.0,
+    "humidity_percent": 50.0
+  }
+}

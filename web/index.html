@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="description" content="Simulador didáctico de acústica de recintos con auralización, RIR, EDC y parámetros de reverberación." />
+  <title>Simulador acústico · Auditorio</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#simulador">Saltar al simulador</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#inicio" aria-label="Inicio del simulador acústico">
+        <span class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </span>
+        <span class="brand-copy">
+          <strong>Simulador acústico</strong>
+          <small>Acústica de recintos · Auralización</small>
+        </span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegación principal">
+        <a href="#simulador">Simulador</a>
+        <a href="#resultados">Resultados</a>
+        <a href="#teoria">Teoría</a>
+        <a href="#metodologia">Metodología</a>
+      </nav>
+
+      <button class="icon-button" id="themeToggle" type="button" aria-label="Cambiar tema" title="Cambiar tema">
+        <span aria-hidden="true">◐</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero shell" id="inicio">
+      <div class="hero-copy">
+        <p class="eyebrow">Herramienta educativa · Instituto Tecnológico de Costa Rica</p>
+        <h1>Escucha cómo un recinto transforma el sonido.</h1>
+        <p class="hero-lede">
+          Modifica la geometría y la absorción de un auditorio, simula su respuesta al impulso y compara el audio seco con la señal auralizada por el motor científico en Python.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#simulador">Abrir simulador</a>
+          <a class="button secondary" href="#teoria">Ver fundamentos</a>
+        </div>
+        <div class="model-badges" aria-label="Características del modelo">
+          <span>pyroomacoustics</span>
+          <span>ISM + ray tracing</span>
+          <span>RIR + Schroeder EDC</span>
+          <span>Auralización</span>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="Representación conceptual de una respuesta al impulso">
+        <div class="scope-head">
+          <span>Respuesta del recinto</span>
+          <span class="mono">h(t)</span>
+        </div>
+        <canvas id="heroWave" width="720" height="330" aria-hidden="true"></canvas>
+        <div class="scope-foot">
+          <span>sonido directo</span>
+          <span>reflexiones tempranas</span>
+          <span>cola reverberante</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="simulador">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Laboratorio interactivo</p>
+          <h2>Simulación acústica</h2>
+        </div>
+        <div class="engine-status" id="engineStatus" data-state="checking" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="engineStatusText">Comprobando motor Python…</span>
+        </div>
+      </div>
+
+      <div class="sim-layout">
+        <aside class="control-panel panel" aria-label="Panel de parámetros de simulación">
+          <div class="panel-head">
+            <div>
+              <p class="panel-kicker">Entrada</p>
+              <h3>Fuente sonora</h3>
+            </div>
+          </div>
+
+          <div class="source-selector" role="radiogroup" aria-label="Seleccionar fuente sonora">
+            <label class="source-option active">
+              <input type="radio" name="source" value="voice" checked />
+              <span class="source-icon" aria-hidden="true">VOZ</span>
+              <span><strong>Voz humana</strong><small>Audio de referencia</small></span>
+            </label>
+            <label class="source-option">
+              <input type="radio" name="source" value="sax" />
+              <span class="source-icon" aria-hidden="true">SAX</span>
+              <span><strong>Saxofón</strong><small>Audio de referencia</small></span>
+            </label>
+            <label class="source-option upload-option">
+              <input type="radio" name="source" value="upload" />
+              <span class="source-icon" aria-hidden="true">WAV</span>
+              <span><strong>Mi audio</strong><small>WAV / MP3 / M4A</small></span>
+            </label>
+          </div>
+
+          <div class="upload-box" id="uploadBox" hidden>
+            <label for="audioFile">Seleccionar archivo</label>
+            <input id="audioFile" type="file" accept="audio/wav,audio/x-wav,.wav" />
+            <small id="uploadHint">Primera versión: archivo WAV. El motor lo convierte a mono y lo normaliza antes de simular.</small>
+          </div>
+
+          <div class="control-section">
+            <div class="control-section-title">
+              <span>Geometría</span>
+              <button class="info-button" type="button" data-theory-target="teoria-geometria" aria-label="Abrir teoría sobre geometría">?</button>
+            </div>
+            <div class="control-grid">
+              <label class="number-field">
+                <span>Ancho</span>
+                <span class="input-with-unit"><input id="width" type="number" min="10" max="30" step="1" value="18" /><b>m</b></span>
+              </label>
+              <label class="number-field">
+                <span>Largo</span>
+                <span class="input-with-unit"><input id="length" type="number" min="24" max="50" step="1" value="30" /><b>m</b></span>
+              </label>
+              <label class="number-field">
+                <span>Alto</span>
+                <span class="input-with-unit"><input id="height" type="number" min="3" max="15" step="0.5" value="7.5" /><b>m</b></span>
+              </label>
+            </div>
+            <div class="derived-line">
+              <span>Volumen</span>
+              <strong id="volumeValue" class="mono">4 050 m³</strong>
+            </div>
+          </div>
+
+          <div class="control-section">
+            <div class="control-section-title">
+              <span>Propiedades acústicas</span>
+              <button class="info-button" type="button" data-theory-target="teoria-absorcion" aria-label="Abrir teoría sobre absorción">?</button>
+            </div>
+
+            <label class="range-field">
+              <span class="range-top">
+                <span>Coeficiente de absorción <i>α</i></span>
+                <output id="absorptionOutput">0.50</output>
+              </span>
+              <input id="absorption" type="range" min="0.05" max="0.95" step="0.05" value="0.50" />
+              <span class="range-scale"><span>reflectante</span><span>absorbente</span></span>
+            </label>
+
+            <label class="range-field">
+              <span class="range-top">
+                <span>Potencia de la fuente <i>L</i><sub>W</sub></span>
+                <output id="powerOutput">100 dB</output>
+              </span>
+              <input id="sourcePower" type="range" min="60" max="130" step="1" value="100" />
+              <span class="range-scale"><span>60 dB</span><span>130 dB</span></span>
+            </label>
+          </div>
+
+          <div class="control-section">
+            <div class="control-section-title">
+              <span>Motor y análisis</span>
+              <button class="info-button" type="button" data-theory-target="teoria-modelo" aria-label="Abrir teoría sobre el modelo">?</button>
+            </div>
+
+            <label class="range-field">
+              <span class="range-top">
+                <span>Orden máximo ISM</span>
+                <output id="orderOutput">3</output>
+              </span>
+              <input id="maxOrder" type="range" min="1" max="10" step="1" value="3" />
+              <span class="range-scale"><span>rápido</span><span>más reflexiones</span></span>
+            </label>
+
+            <label class="select-field">
+              <span>Frecuencia de análisis</span>
+              <select id="analysisFrequency">
+                <option value="125">125 Hz</option>
+                <option value="250">250 Hz</option>
+                <option value="500">500 Hz</option>
+                <option value="1000" selected>1000 Hz</option>
+                <option value="2000">2000 Hz</option>
+                <option value="4000">4000 Hz</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="control-actions">
+            <button class="button secondary" id="resetButton" type="button">Reiniciar</button>
+            <button class="button primary simulate-button" id="simulateButton" type="button">
+              <span id="simulateButtonLabel">Simular</span>
+              <span class="button-loader" aria-hidden="true"></span>
+            </button>
+          </div>
+          <p class="form-message" id="formMessage" aria-live="polite"></p>
+        </aside>
+
+        <div class="workspace">
+          <section class="panel room-panel" aria-labelledby="roomTitle">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Escenario</p>
+                <h3 id="roomTitle">Auditorio tipo Shoebox</h3>
+              </div>
+              <span class="mono micro-label">5 receptores · centro = R3</span>
+            </div>
+
+            <div class="room-stage" id="roomStage" aria-label="Vista esquemática de fuente y receptores en la sala">
+              <div class="room-floor">
+                <span class="stage-label">escenario</span>
+                <span class="source-marker" title="Fuente sonora"><i></i><b>F</b></span>
+                <span class="receiver-marker r1" title="Receptor 1">R1</span>
+                <span class="receiver-marker r2" title="Receptor 2">R2</span>
+                <span class="receiver-marker r3 active" title="Receptor central">R3</span>
+                <span class="receiver-marker r4" title="Receptor 4">R4</span>
+                <span class="receiver-marker r5" title="Receptor 5">R5</span>
+              </div>
+            </div>
+
+            <div class="room-meta">
+              <div><span>Temperatura</span><strong>20 °C</strong></div>
+              <div><span>Humedad</span><strong>50 %</strong></div>
+              <div><span>Absorción del aire</span><strong>Activa</strong></div>
+              <div><span>Modelo</span><strong>ISM + RT</strong></div>
+            </div>
+          </section>
+
+          <section class="panel audio-panel" aria-labelledby="audioTitle">
+            <div class="panel-head">
+              <div>
+                <p class="panel-kicker">Auralización</p>
+                <h3 id="audioTitle">Comparación auditiva</h3>
+              </div>
+              <button class="text-link" id="audioTheoryLink" type="button" data-theory-target="teoria-auralizacion">¿Qué estoy escuchando?</button>
+            </div>
+
+            <div class="audio-grid">
+              <article class="audio-card dry">
+                <div class="audio-card-head">
+                  <span class="audio-index">01</span>
+                  <div><h4>Audio original</h4><p>Señal seca, antes de entrar al recinto.</p></div>
+                </div>
+                <audio id="dryAudio" controls preload="metadata"></audio>
+              </article>
+
+              <article class="audio-card wet">
+                <div class="audio-card-head">
+                  <span class="audio-index">02</span>
+                  <div><h4>Audio en el auditorio</h4><p>Resultado procesado por el motor acústico.</p></div>
+                </div>
+                <audio id="wetAudio" controls preload="metadata"></audio>
+                <div class="waiting-overlay" id="wetAudioPlaceholder">Ejecuta una simulación para generar este audio.</div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="resultados">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Lectura científica</p>
+          <h2>Resultados de la simulación</h2>
+        </div>
+        <p class="section-note">Las métricas permanecen vacías hasta recibir resultados del motor Python.</p>
+      </div>
+
+      <div class="metrics-grid" id="metricsGrid">
+        <article class="metric-card"><span>EDT</span><strong data-metric="edt">—</strong><small>s</small><p>Decaimiento temprano.</p></article>
+        <article class="metric-card"><span>T20</span><strong data-metric="t20">—</strong><small>s</small><p>Extrapolación −5 a −25 dB.</p></article>
+        <article class="metric-card"><span>T30</span><strong data-metric="t30">—</strong><small>s</small><p>Extrapolación −5 a −35 dB.</p></article>
+        <article class="metric-card"><span>C50</span><strong data-metric="c50">—</strong><small>dB</small><p>Claridad de la palabra.</p></article>
+        <article class="metric-card"><span>C80</span><strong data-metric="c80">—</strong><small>dB</small><p>Claridad musical.</p></article>
+        <article class="metric-card"><span>D50</span><strong data-metric="d50">—</strong><small>%</small><p>Definición temprana.</p></article>
+        <article class="metric-card lp-card"><span>L<sub>p</sub></span><strong data-metric="Lp">—</strong><small>dB</small><p>Estimación del campo sonoro.</p></article>
+      </div>
+
+      <div class="chart-grid">
+        <article class="panel chart-panel">
+          <div class="panel-head">
+            <div><p class="panel-kicker">Dominio temporal</p><h3>Respuesta al impulso · RIR</h3></div>
+            <span class="chart-value mono" id="rirDuration">—</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="rirChart" width="960" height="380" aria-label="Gráfica de la respuesta al impulso"></canvas>
+            <div class="chart-empty" id="rirEmpty">La RIR aparecerá después de simular.</div>
+          </div>
+          <div class="axis-footer"><span>Tiempo [s]</span><span>Amplitud normalizada</span></div>
+        </article>
+
+        <article class="panel chart-panel">
+          <div class="panel-head">
+            <div><p class="panel-kicker">Decaimiento energético</p><h3>Curva de Schroeder · EDC</h3></div>
+            <span class="chart-value mono" id="edcBand">1000 Hz</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="edcChart" width="960" height="380" aria-label="Gráfica de la curva de decaimiento energético"></canvas>
+            <div class="chart-empty" id="edcEmpty">La EDC aparecerá después de simular.</div>
+          </div>
+          <div class="axis-footer"><span>Tiempo [s]</span><span>Nivel relativo [dB]</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="theory-section" id="teoria">
+      <div class="shell theory-shell">
+        <div class="section-heading theory-heading">
+          <div>
+            <p class="eyebrow">Fundamentos</p>
+            <h2>Teoría detrás de la simulación</h2>
+          </div>
+          <p class="section-note">De la respuesta al impulso a lo que realmente escuchamos.</p>
+        </div>
+
+        <div class="theory-layout">
+          <aside class="theory-nav" aria-label="Índice de teoría">
+            <a href="#teoria-rir">01 · RIR</a>
+            <a href="#teoria-auralizacion">02 · Auralización</a>
+            <a href="#teoria-schroeder">03 · EDC</a>
+            <a href="#teoria-rt">04 · EDT / T20 / T30</a>
+            <a href="#teoria-claridad">05 · C50 / C80 / D50</a>
+            <a href="#teoria-absorcion">06 · Absorción</a>
+            <a href="#teoria-geometria">07 · Geometría</a>
+            <a href="#teoria-modelo">08 · ISM + ray tracing</a>
+          </aside>
+
+          <div class="theory-content">
+            <article class="theory-card" id="teoria-rir">
+              <div class="theory-number">01</div>
+              <div>
+                <p class="panel-kicker">Room Impulse Response</p>
+                <h3>La RIR caracteriza el camino entre fuente y receptor</h3>
+                <p>
+                  Si el recinto se aproxima como un sistema lineal e invariante en el tiempo, su comportamiento entre una fuente y un receptor puede representarse mediante una respuesta al impulso \(h(t)\). En ella aparecen el sonido directo, las reflexiones tempranas y el decaimiento reverberante.
+                </p>
+                <div class="concept-strip">
+                  <span>Impulso</span><i>→</i><span>Recinto</span><i>→</i><strong>h(t)</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-auralizacion">
+              <div class="theory-number">02</div>
+              <div>
+                <p class="panel-kicker">Convolución</p>
+                <h3>La auralización convierte la RIR en una experiencia auditiva</h3>
+                <p>
+                  Una señal seca \(x(t)\) se transforma en la señal que escucharía el receptor mediante la convolución con la RIR del recinto:
+                </p>
+                <div class="equation">\[y(t)=x(t)*h(t)\]</div>
+                <p>
+                  Por eso la voz y el saxofón reaccionan de forma distinta ante la misma sala: la RIR es la misma para una configuración determinada, pero el contenido temporal y espectral de cada señal de entrada es diferente.
+                </p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-schroeder">
+              <div class="theory-number">03</div>
+              <div>
+                <p class="panel-kicker">Energy Decay Curve</p>
+                <h3>La integración de Schroeder revela cómo desaparece la energía</h3>
+                <p>La energía remanente se obtiene integrando hacia atrás el cuadrado de la respuesta al impulso:</p>
+                <div class="equation">\[EDC(t)=\int_t^{\infty} h^2(\tau)\,d\tau\]</div>
+                <p>Para analizar el decaimiento se normaliza respecto a la energía inicial y se expresa en decibelios:</p>
+                <div class="equation">\[EDC_{dB}(t)=10\log_{10}\!\left(\frac{EDC(t)}{EDC(0)}\right)\]</div>
+                <p class="theory-note">En el motor actual la RIR se filtra por bandas de octava antes de calcular esta curva.</p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-rt">
+              <div class="theory-number">04</div>
+              <div>
+                <p class="panel-kicker">Reverberación</p>
+                <h3>EDT, T20 y T30 estiman el decaimiento equivalente a 60 dB</h3>
+                <p>En lugar de exigir una caída medida de 60 dB, se ajusta una recta sobre diferentes regiones de la EDC y se extrapola su pendiente.</p>
+                <div class="definition-grid">
+                  <div><strong>EDT</strong><span>0 a −10 dB</span><p>Más relacionado con la percepción del inicio del decaimiento.</p></div>
+                  <div><strong>T20</strong><span>−5 a −25 dB</span><p>Utiliza un intervalo de 20 dB y extrapola a 60 dB.</p></div>
+                  <div><strong>T30</strong><span>−5 a −35 dB</span><p>Utiliza una región de 30 dB y suele ser más robusto cuando está disponible.</p></div>
+                </div>
+                <div class="equation">\[T_{60}=-\frac{60}{m}\]</div>
+                <p class="theory-note">Aquí \(m\) es la pendiente del ajuste lineal de la EDC en dB por segundo.</p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-claridad">
+              <div class="theory-number">05</div>
+              <div>
+                <p class="panel-kicker">Energía temprana / tardía</p>
+                <h3>Claridad y definición cuantifican cuándo llega la energía</h3>
+                <div class="equation">\[C_{50}=10\log_{10}\!\left(\frac{\int_0^{0.05} h^2(t)dt}{\int_{0.05}^{\infty} h^2(t)dt}\right)\]</div>
+                <div class="equation">\[C_{80}=10\log_{10}\!\left(\frac{\int_0^{0.08} h^2(t)dt}{\int_{0.08}^{\infty} h^2(t)dt}\right)\]</div>
+                <div class="equation">\[D_{50}=100\,\frac{\int_0^{0.05} h^2(t)dt}{\int_0^{\infty} h^2(t)dt}\]</div>
+                <p>C50 y D50 son especialmente útiles al discutir inteligibilidad de palabra; C80 se utiliza comúnmente al discutir claridad musical.</p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-absorcion">
+              <div class="theory-number">06</div>
+              <div>
+                <p class="panel-kicker">Materiales</p>
+                <h3>El coeficiente α controla qué fracción de energía no se refleja</h3>
+                <p>
+                  En el modelo inicial todas las superficies comparten un coeficiente de absorción promedio \(\alpha\). Valores bajos representan límites más reflectantes y valores altos límites más absorbentes.
+                </p>
+                <div class="absorption-scale" aria-hidden="true"><span>α = 0</span><i></i><span>α = 1</span></div>
+                <p>
+                  Al aumentar la absorción, la energía reflejada tiende a extinguirse con mayor rapidez y los tiempos de reverberación suelen disminuir. Esta versión usa un valor uniforme; una extensión futura puede emplear absorción dependiente de frecuencia y de cada superficie.
+                </p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-geometria">
+              <div class="theory-number">07</div>
+              <div>
+                <p class="panel-kicker">Recinto</p>
+                <h3>La geometría cambia las trayectorias y el volumen acústico</h3>
+                <p>El motor representa el auditorio como una sala rectangular de dimensiones \(W\times L\times H\). Su volumen es:</p>
+                <div class="equation">\[V=W\,L\,H\]</div>
+                <p>
+                  Cambiar las dimensiones modifica las distancias fuente–receptor, los tiempos de llegada de las reflexiones y la superficie total disponible para absorber energía.
+                </p>
+              </div>
+            </article>
+
+            <article class="theory-card" id="teoria-modelo">
+              <div class="theory-number">08</div>
+              <div>
+                <p class="panel-kicker">Motor geométrico</p>
+                <h3>Image Source Method + ray tracing</h3>
+                <p>
+                  El motor Python utiliza <code>pyroomacoustics.ShoeBox</code>. Las reflexiones especulares se modelan mediante el método de fuentes imagen y se complementan con trazado de rayos para representar mejor el campo reverberante tardío.
+                </p>
+                <div class="method-diagram" aria-hidden="true">
+                  <span>Fuente</span><i>→</i><span>ISM</span><i>+</i><span>Ray tracing</span><i>→</i><strong>RIR</strong>
+                </div>
+                <p class="theory-note">
+                  El orden máximo ISM es un parámetro computacional del modelo. Aumentarlo no garantiza por sí solo mayor fidelidad física; también aumenta el costo de cálculo.
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="metodologia">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Transparencia del modelo</p>
+          <h2>Metodología y alcance</h2>
+        </div>
+      </div>
+
+      <div class="methodology-grid">
+        <article class="panel methodology-card">
+          <span class="method-index">A</span>
+          <h3>Una sola fuente de verdad científica</h3>
+          <p>La interfaz no calcula la física. Envía los parámetros al backend, que ejecuta el mismo <code>acoustic_engine.py</code> utilizado para validar el modelo en Python.</p>
+        </article>
+        <article class="panel methodology-card">
+          <span class="method-index">B</span>
+          <h3>Audio y métricas desde la misma RIR</h3>
+          <p>La arquitectura prevista reutiliza una única realización de la respuesta al impulso para la auralización y para el cálculo de las métricas, evitando inconsistencias entre lo escuchado y lo graficado.</p>
+        </article>
+        <article class="panel methodology-card">
+          <span class="method-index">C</span>
+          <h3>Supuestos actuales</h3>
+          <p>Sala rectangular, absorción uniforme, fuente omnidireccional, cinco receptores fijos, 20 °C, 50 % HR y absorción del aire activada.</p>
+        </article>
+        <article class="panel methodology-card warning-card">
+          <span class="method-index">D</span>
+          <h3>Interpretación responsable</h3>
+          <p>Es una simulación de acústica geométrica, no una medición del auditorio. El audio procesado se normaliza para comparación perceptual; por ello su volumen reproducido no debe interpretarse como una medición absoluta de <i>L</i><sub>p</sub>.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div>
+        <strong>Simulador acústico de auditorio</strong>
+        <p>Frontend preparado para conectarse a un backend Python basado en pyroomacoustics.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#simulador">Simular</a>
+        <a href="#teoria">Fundamentos</a>
+        <a href="#metodologia">Metodología</a>
+      </div>
+    </div>
+  </footer>
+
+  <dialog class="info-dialog" id="infoDialog">
+    <button class="dialog-close" id="dialogClose" type="button" aria-label="Cerrar">×</button>
+    <div id="dialogContent"></div>
+  </dialog>
+</body>
+</html>
