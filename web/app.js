@@ -83,6 +83,8 @@
   let uploadObjectUrl = null;
   let processedObjectUrl = null;
   let engineOnline = false;
+  let lastRirSeries = null;
+  let lastEdcSeries = null;
 
   // ---------------------------------------------------------------------------
   // Theme
@@ -97,9 +99,16 @@
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     localStorage.setItem('acoustic-theme', next);
-    requestAnimationFrame(drawHeroWave);
-    if (!els.rirEmpty.hidden) clearCanvas(els.rirChart);
-    if (!els.edcEmpty.hidden) clearCanvas(els.edcChart);
+    requestAnimationFrame(() => {
+      drawHeroWave();
+      if (lastRirSeries?.values?.length) {
+        drawLineChart(els.rirChart, lastRirSeries.values, lastRirSeries.fs, { type: 'rir' });
+      }
+      if (lastEdcSeries?.values?.length) {
+        drawLineChart(els.edcChart, lastEdcSeries.values, lastEdcSeries.fs, { type: 'edc' });
+      }
+      window.dispatchEvent(new Event('acoustic-theme-change'));
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -264,14 +273,21 @@
     }
   });
 
+  function isSupportedUploadFile(file) {
+    if (!file?.name) return false;
+    const name = file.name.toLowerCase();
+    return name.endsWith('.wav') || name.endsWith('.m4a') || name.endsWith('.mp3');
+  }
+
   function validateForm() {
     const width = Number(els.width.value);
     const length = Number(els.length.value);
     const height = Number(els.height.value);
-    if (width < 10) return 'El ancho debe ser al menos 10 m para mantener los receptores dentro de la sala.';
-    if (length < 24) return 'El largo debe ser al menos 24 m para mantener los receptores dentro de la sala.';
-    if (height < 3) return 'La altura debe ser al menos 3 m.';
+    if (width < 6 || width > 40) return 'El ancho debe estar entre 6 y 40 m.';
+    if (length < 8 || length > 60) return 'El largo debe estar entre 8 y 60 m.';
+    if (height < 2.5 || height > 18) return 'La altura debe estar entre 2.5 y 18 m.';
     if (selectedSource === 'upload' && !els.audioFile.files[0]) return 'Selecciona un archivo de audio antes de simular.';
+    if (selectedSource === 'upload' && !isSupportedUploadFile(els.audioFile.files[0])) return 'Formato no soportado. Usa un archivo WAV, M4A o MP3.';
     return '';
   }
 
@@ -297,21 +313,25 @@
     const edc = normalizeSeries(result.edc, result.fs);
 
     if (rir.values.length) {
+      lastRirSeries = rir;
       els.rirEmpty.hidden = true;
       drawLineChart(els.rirChart, rir.values, rir.fs, { type: 'rir' });
       els.rirDuration.textContent = `${(rir.values.length / rir.fs).toFixed(2)} s`;
     } else {
+      lastRirSeries = null;
       els.rirEmpty.hidden = false;
       clearCanvas(els.rirChart);
       els.rirDuration.textContent = '—';
     }
 
     if (edc.values.length) {
+      lastEdcSeries = edc;
       els.edcEmpty.hidden = true;
       drawLineChart(els.edcChart, edc.values, edc.fs, { type: 'edc' });
       const band = result.edc?.frequency_hz ?? els.analysisFrequency.value;
       els.edcBand.textContent = `${band} Hz`;
     } else {
+      lastEdcSeries = null;
       els.edcEmpty.hidden = false;
       clearCanvas(els.edcChart);
     }
@@ -429,14 +449,15 @@
     const pad = { l: 48, r: 18, t: 18, b: 34 };
     const plotW = width - pad.l - pad.r;
     const plotH = height - pad.t - pad.b;
-    const inkFaint = css('--ink-faint');
-    const line = css('--line');
+    const axis = css('--chart-axis');
+    const grid = css('--chart-grid');
+    const axisStrong = css('--chart-axis-strong');
     const signal = options.type === 'edc' ? css('--accent') : css('--blue');
 
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = line;
-    ctx.fillStyle = inkFaint;
+    ctx.strokeStyle = grid;
+    ctx.fillStyle = axis;
     ctx.font = '10px JetBrains Mono, monospace';
 
     let minY, maxY;
@@ -465,13 +486,24 @@
     if (options.type === 'edc') {
       ctx.save();
       ctx.setLineDash([4, 5]);
-      ctx.strokeStyle = css('--line-strong');
+      ctx.strokeStyle = axisStrong;
       [-5, -10, -25, -35].forEach(db => {
         const y = pad.t + ((maxY - db) / (maxY - minY)) * plotH;
         ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + plotW, y); ctx.stroke();
       });
       ctx.restore();
     }
+
+    // Draw explicit axes with stronger contrast than the grid.
+    ctx.save();
+    ctx.strokeStyle = axisStrong;
+    ctx.lineWidth = 1.15;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, pad.t);
+    ctx.lineTo(pad.l, pad.t + plotH);
+    ctx.lineTo(pad.l + plotW, pad.t + plotH);
+    ctx.stroke();
+    ctx.restore();
 
     const points = downsampleWithIndex(values, Math.max(350, Math.floor(plotW * 1.4)));
     ctx.beginPath();
@@ -566,7 +598,7 @@
     },
     'teoria-geometria': {
       title: 'Geometría del auditorio',
-      body: 'La sala se modela como un paralelepípedo rectangular. Las dimensiones modifican el volumen, las distancias fuente–receptor y los tiempos de llegada de las reflexiones. Los mínimos del frontend mantienen los cinco receptores del modelo dentro del recinto.'
+      body: 'La sala se modela como un paralelepípedo rectangular. En v3, la fuente y los cinco receptores se escalan proporcionalmente con las dimensiones, manteniendo la distribución del recinto de referencia y permitiendo comparar presets pequeños y grandes.'
     },
     'teoria-modelo': {
       title: 'ISM + ray tracing',
@@ -606,6 +638,12 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       drawHeroWave();
+      if (lastRirSeries?.values?.length) {
+        drawLineChart(els.rirChart, lastRirSeries.values, lastRirSeries.fs, { type: 'rir' });
+      }
+      if (lastEdcSeries?.values?.length) {
+        drawLineChart(els.edcChart, lastEdcSeries.values, lastEdcSeries.fs, { type: 'edc' });
+      }
     }, 120);
   });
 

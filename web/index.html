@@ -19,7 +19,9 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script defer src="presets.js"></script>
   <script defer src="app.js"></script>
+  <script defer src="v3.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#simulador">Saltar al simulador</a>
@@ -38,7 +40,9 @@
 
       <nav class="main-nav" aria-label="Navegación principal">
         <a href="#simulador">Simulador</a>
+        <a href="#escenarios">Escenarios</a>
         <a href="#resultados">Resultados</a>
+        <a href="#comparar">Comparar</a>
         <a href="#teoria">Teoría</a>
         <a href="#metodologia">Metodología</a>
       </nav>
@@ -95,6 +99,26 @@
         </div>
       </div>
 
+
+      <section class="preset-section panel" id="escenarios" aria-labelledby="presetTitle">
+        <div class="panel-head preset-head">
+          <div>
+            <p class="panel-kicker">Puntos de partida</p>
+            <h3 id="presetTitle">Escenarios de recinto y absorción</h3>
+          </div>
+          <p class="preset-disclaimer">Los presets solo cargan parámetros. Los resultados acústicos se calculan exclusivamente en Python.</p>
+        </div>
+        <div class="preset-block">
+          <div class="preset-block-head"><span>Tipo de recinto</span><small>Selecciona una geometría base</small></div>
+          <div class="preset-strip" id="roomPresetCards" aria-label="Presets de recinto"></div>
+        </div>
+        <div class="preset-block">
+          <div class="preset-block-head"><span>Condición de absorción</span><small>Coeficiente uniforme de referencia</small></div>
+          <div class="preset-strip" id="materialPresetCards" aria-label="Presets de absorción"></div>
+        </div>
+        <p class="preset-note">Nota: los nombres de materiales son escenarios didácticos. La absorción de materiales reales depende de la frecuencia, montaje, espesor y condiciones de instalación.</p>
+      </section>
+
       <div class="sim-layout">
         <aside class="control-panel panel" aria-label="Panel de parámetros de simulación">
           <div class="panel-head">
@@ -117,15 +141,15 @@
             </label>
             <label class="source-option upload-option">
               <input type="radio" name="source" value="upload" />
-              <span class="source-icon" aria-hidden="true">WAV</span>
-              <span><strong>Mi audio</strong><small>WAV / MP3 / M4A</small></span>
+              <span class="source-icon" aria-hidden="true">AUDIO</span>
+              <span><strong>Mi audio</strong><small>Archivo WAV, M4A o MP3 propio</small></span>
             </label>
           </div>
 
           <div class="upload-box" id="uploadBox" hidden>
             <label for="audioFile">Seleccionar archivo</label>
-            <input id="audioFile" type="file" accept="audio/wav,audio/x-wav,.wav" />
-            <small id="uploadHint">Primera versión: archivo WAV. El motor lo convierte a mono y lo normaliza antes de simular.</small>
+            <input id="audioFile" type="file" accept="audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,audio/aac,audio/mpeg,audio/mp3,.wav,.m4a,.mp3" />
+            <small id="uploadHint">Formatos admitidos: WAV, M4A (AAC) y MP3. El motor decodifica, convierte a mono y normaliza antes de simular.</small>
           </div>
 
           <div class="control-section">
@@ -136,15 +160,15 @@
             <div class="control-grid">
               <label class="number-field">
                 <span>Ancho</span>
-                <span class="input-with-unit"><input id="width" type="number" min="10" max="30" step="1" value="18" /><b>m</b></span>
+                <span class="input-with-unit"><input id="width" type="number" min="6" max="40" step="1" value="18" /><b>m</b></span>
               </label>
               <label class="number-field">
                 <span>Largo</span>
-                <span class="input-with-unit"><input id="length" type="number" min="24" max="50" step="1" value="30" /><b>m</b></span>
+                <span class="input-with-unit"><input id="length" type="number" min="8" max="60" step="1" value="30" /><b>m</b></span>
               </label>
               <label class="number-field">
                 <span>Alto</span>
-                <span class="input-with-unit"><input id="height" type="number" min="3" max="15" step="0.5" value="7.5" /><b>m</b></span>
+                <span class="input-with-unit"><input id="height" type="number" min="2.5" max="18" step="0.5" value="7.5" /><b>m</b></span>
               </label>
             </div>
             <div class="derived-line">
@@ -297,6 +321,26 @@
         <article class="metric-card lp-card"><span>L<sub>p</sub></span><strong data-metric="Lp">—</strong><small>dB</small><p>Estimación del campo sonoro.</p></article>
       </div>
 
+
+      <div class="results-summary panel" id="resultsSummary">
+        <div class="summary-block">
+          <div class="summary-head"><span>Tiempos de reverberación</span><small>Datos del motor Python</small></div>
+          <div class="metric-bars" id="reverbBars">
+            <div class="metric-bar-row" data-bar-key="edt"><span>EDT</span><i><b></b></i><strong>—</strong></div>
+            <div class="metric-bar-row" data-bar-key="t20"><span>T20</span><i><b></b></i><strong>—</strong></div>
+            <div class="metric-bar-row" data-bar-key="t30"><span>T30</span><i><b></b></i><strong>—</strong></div>
+          </div>
+        </div>
+        <div class="summary-block">
+          <div class="summary-head"><span>Claridad y definición</span><small>Energía temprana / tardía</small></div>
+          <div class="metric-bars" id="clarityBars">
+            <div class="metric-bar-row diverging" data-bar-key="c50"><span>C50</span><i><em></em><b></b></i><strong>—</strong></div>
+            <div class="metric-bar-row diverging" data-bar-key="c80"><span>C80</span><i><em></em><b></b></i><strong>—</strong></div>
+            <div class="metric-bar-row" data-bar-key="d50"><span>D50</span><i><b></b></i><strong>—</strong></div>
+          </div>
+        </div>
+      </div>
+
       <div class="chart-grid">
         <article class="panel chart-panel">
           <div class="panel-head">
@@ -321,6 +365,68 @@
           </div>
           <div class="axis-footer"><span>Tiempo [s]</span><span>Nivel relativo [dB]</span></div>
         </article>
+      </div>
+    </section>
+
+
+    <section class="section shell" id="comparar">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Laboratorio A/B</p>
+          <h2>Compara dos condiciones acústicas</h2>
+        </div>
+        <p class="section-note">La comparación ejecuta dos simulaciones reales con el mismo audio, frecuencia, potencia y orden ISM.</p>
+      </div>
+
+      <div class="compare-config-grid">
+        <article class="panel compare-config col-a">
+          <div class="compare-title"><span class="compare-dot"></span><strong>Espacio A</strong></div>
+          <label><span>Recinto</span><select id="compareRoomA"></select></label>
+          <label><span>Absorción</span><select id="compareMaterialA"></select></label>
+          <div class="compare-config-readout" id="compareReadoutA"></div>
+        </article>
+        <article class="panel compare-config col-b">
+          <div class="compare-title"><span class="compare-dot"></span><strong>Espacio B</strong></div>
+          <label><span>Recinto</span><select id="compareRoomB"></select></label>
+          <label><span>Absorción</span><select id="compareMaterialB"></select></label>
+          <div class="compare-config-readout" id="compareReadoutB"></div>
+        </article>
+      </div>
+
+      <div class="compare-actions">
+        <button class="button primary" id="compareButton" type="button">Simular A y B</button>
+        <span id="compareStatus" class="compare-status" aria-live="polite">Usa la fuente sonora seleccionada en el simulador principal.</span>
+      </div>
+
+      <div class="compare-output-grid">
+        <article class="panel compare-chart-panel">
+          <div class="panel-head"><div><p class="panel-kicker">Decaimiento</p><h3>EDC comparativa</h3></div><span class="mono micro-label" id="compareBand">1000 Hz</span></div>
+          <div class="chart-wrap compare-chart-wrap">
+            <canvas id="compareEdcChart" width="1100" height="410" aria-label="Comparación de curvas EDC A y B"></canvas>
+            <div class="chart-empty" id="compareEdcEmpty">Ejecuta la comparación para visualizar A y B.</div>
+          </div>
+          <div class="compare-legend"><span><i class="legend-a"></i>Espacio A</span><span><i class="legend-b"></i>Espacio B</span></div>
+        </article>
+
+        <article class="panel compare-audio-panel">
+          <div class="panel-head"><div><p class="panel-kicker">Auralización</p><h3>Escucha la diferencia</h3></div></div>
+          <div class="compare-audio-list">
+            <div><strong>A</strong><audio id="compareAudioA" controls preload="none"></audio><span id="compareAudioPlaceholderA">Pendiente</span></div>
+            <div><strong>B</strong><audio id="compareAudioB" controls preload="none"></audio><span id="compareAudioPlaceholderB">Pendiente</span></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="panel compare-table-panel">
+        <div class="panel-head"><div><p class="panel-kicker">Resumen</p><h3>Métricas A/B</h3></div></div>
+        <div class="table-scroll">
+          <table class="compare-table">
+            <thead><tr><th>Parámetro</th><th>Espacio A</th><th>Espacio B</th><th>Δ B−A</th></tr></thead>
+            <tbody id="compareMetricsBody">
+              <tr><td colspan="4">Ejecuta la comparación para generar resultados.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -488,7 +594,7 @@
         <article class="panel methodology-card">
           <span class="method-index">C</span>
           <h3>Supuestos actuales</h3>
-          <p>Sala rectangular, absorción uniforme, fuente omnidireccional, cinco receptores fijos, 20 °C, 50 % HR y absorción del aire activada.</p>
+          <p>Sala rectangular, absorción uniforme, fuente omnidireccional, cinco receptores escalados proporcionalmente con la geometría, 20 °C, 50 % HR y absorción del aire activada.</p>
         </article>
         <article class="panel methodology-card warning-card">
           <span class="method-index">D</span>
@@ -503,10 +609,11 @@
     <div class="shell footer-inner">
       <div>
         <strong>Simulador acústico de auditorio</strong>
-        <p>Frontend preparado para conectarse a un backend Python basado en pyroomacoustics.</p>
+        <p>Aplicación web conectada a un backend Python basado en pyroomacoustics.</p>
       </div>
       <div class="footer-links">
         <a href="#simulador">Simular</a>
+        <a href="#comparar">Comparar</a>
         <a href="#teoria">Fundamentos</a>
         <a href="#metodologia">Metodología</a>
       </div>

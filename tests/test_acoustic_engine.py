@@ -138,3 +138,14 @@ def test_extracted_analysis_matches_legacy_equations():
         np.testing.assert_allclose(
             metrics_new[key], metrics_old[key], rtol=1e-12, atol=1e-12, equal_nan=True
         )
+
+
+def test_scaled_geometry_stays_inside_small_room_preset():
+    cfg = RoomConfig(width_m=7.0, length_m=10.0, height_m=3.5)
+    src = source_location(cfg)
+    mics = receiver_locations(cfg)
+    assert np.all(src > 0)
+    assert src[0] < cfg.width_m and src[1] < cfg.length_m and src[2] < cfg.height_m
+    assert np.all(mics[0] > 0) and np.all(mics[0] < cfg.width_m)
+    assert np.all(mics[1] > 0) and np.all(mics[1] < cfg.length_m)
+    assert np.all(mics[2] > 0) and np.all(mics[2] < cfg.height_m)
