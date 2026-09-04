@@ -2,13 +2,9 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-.cache/
 .ruff_cache/
-
+.cache/
+runtime_results/
 *.log
 .DS_Store
 Thumbs.db
-
-generated/
-temp/
-tmp/

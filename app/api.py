@@ -9,6 +9,8 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -21,6 +23,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from scipy.io import wavfile
+from imageio_ffmpeg import get_ffmpeg_exe
 
 from .acoustic_engine import OCTAVE_BANDS_HZ, RoomConfig, simulate_acoustics
 
@@ -35,6 +38,8 @@ EXAMPLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_AUDIO_SECONDS = 60.0
 MAX_RESULT_DIRECTORIES = 24
+FFMPEG_TIMEOUT_SECONDS = 30
+SUPPORTED_UPLOAD_SUFFIXES = {".wav", ".m4a", ".mp3"}
 
 EXAMPLE_AUDIO = {
     "voice": {
@@ -49,7 +54,7 @@ EXAMPLE_AUDIO = {
 
 app = FastAPI(
     title="Simulador acústico de auditorio",
-    version="0.1.0",
+    version="0.3.2",
     description="API para auralización y parámetros acústicos mediante pyroomacoustics.",
 )
 
@@ -69,9 +74,9 @@ def _validate_config(
     max_order: int,
     analysis_frequency_hz: int,
 ) -> RoomConfig:
-    width_m = _clean_number(width_m, "width_m", 10.0, 30.0)
-    length_m = _clean_number(length_m, "length_m", 24.0, 50.0)
-    height_m = _clean_number(height_m, "height_m", 3.0, 15.0)
+    width_m = _clean_number(width_m, "width_m", 6.0, 40.0)
+    length_m = _clean_number(length_m, "length_m", 8.0, 60.0)
+    height_m = _clean_number(height_m, "height_m", 2.5, 18.0)
     absorption = _clean_number(absorption, "absorption", 0.05, 0.95)
     source_power_db = _clean_number(source_power_db, "source_power_db", 60.0, 130.0)
 
@@ -114,6 +119,87 @@ def _read_wav_bytes(raw: bytes, label: str) -> tuple[int, np.ndarray]:
     return int(fs), np.asarray(audio)
 
 
+def _decode_compressed_audio_bytes(
+    raw: bytes, label: str, suffix: str
+) -> tuple[int, np.ndarray]:
+    """Decode M4A/AAC or MP3 to PCM WAV using bundled FFmpeg.
+
+    ``imageio-ffmpeg`` supplies a platform-specific FFmpeg executable, so the
+    Cloud Run image does not need a separate system-level FFmpeg installation.
+    """
+    normalized_suffix = suffix.lower()
+    if normalized_suffix not in {".m4a", ".mp3"}:
+        raise HTTPException(415, f"Formato comprimido no soportado: {normalized_suffix}.")
+
+    format_label = "M4A" if normalized_suffix == ".m4a" else "MP3"
+    try:
+        ffmpeg_exe = get_ffmpeg_exe()
+    except Exception as exc:
+        raise HTTPException(
+            500, f"FFmpeg no está disponible para decodificar {format_label}."
+        ) from exc
+
+    with tempfile.TemporaryDirectory(prefix="acoustic_decode_") as tmpdir:
+        input_path = Path(tmpdir) / f"input{normalized_suffix}"
+        output_path = Path(tmpdir) / "decoded.wav"
+        input_path.write_bytes(raw)
+
+        command = [
+            ffmpeg_exe,
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(input_path),
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-map_metadata",
+            "-1",
+            "-acodec",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            "-y",
+            str(output_path),
+        ]
+
+        try:
+            completed = subprocess.run(
+                command,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=FFMPEG_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(
+                408, f"La decodificación del archivo {format_label} excedió el tiempo permitido."
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            message = (exc.stderr or b"").decode("utf-8", errors="replace").strip()
+            if len(message) > 300:
+                message = message[:300] + "…"
+            detail = f"No fue posible decodificar {label} como {format_label}"
+            if message:
+                detail += f": {message}"
+            raise HTTPException(400, detail) from exc
+
+        if completed.returncode != 0 or not output_path.is_file():
+            raise HTTPException(400, f"No fue posible decodificar {label} como {format_label}.")
+
+        return _read_wav_bytes(output_path.read_bytes(), f"{label} (decodificado)")
+
+def _read_uploaded_audio_bytes(raw: bytes, filename: str) -> tuple[int, np.ndarray]:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".wav":
+        return _read_wav_bytes(raw, filename)
+    if suffix in {".m4a", ".mp3"}:
+        return _decode_compressed_audio_bytes(raw, filename, suffix)
+    raise HTTPException(415, "Formato no soportado. Usa un archivo WAV, M4A o MP3.")
+
+
 def _download_example(source: str) -> bytes:
     spec = EXAMPLE_AUDIO[source]
     cached = EXAMPLE_CACHE_DIR / spec["filename"]
@@ -147,17 +233,18 @@ async def _load_source_audio(source: str, audio_file: UploadFile | None) -> tupl
     if source != "upload":
         raise HTTPException(422, "source debe ser 'voice', 'sax' o 'upload'.")
     if audio_file is None:
-        raise HTTPException(422, "Debes seleccionar un archivo WAV.")
+        raise HTTPException(422, "Debes seleccionar un archivo WAV, M4A o MP3.")
 
-    filename = (audio_file.filename or "audio.wav").lower()
-    if not filename.endswith(".wav"):
-        raise HTTPException(415, "La primera versión acepta únicamente archivos WAV.")
+    filename = audio_file.filename or "audio.wav"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in SUPPORTED_UPLOAD_SUFFIXES:
+        raise HTTPException(415, "Formato no soportado. Usa un archivo WAV, M4A o MP3.")
 
     raw = await audio_file.read(MAX_UPLOAD_BYTES + 1)
     await audio_file.close()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "El archivo supera el límite de 25 MB.")
-    return _read_wav_bytes(raw, audio_file.filename or "audio.wav")
+    return _read_uploaded_audio_bytes(raw, filename)
 
 
 def _finite_or_none(value: float) -> float | None:
@@ -187,7 +274,7 @@ def health() -> dict[str, object]:
         "engine": "pyroomacoustics",
         "octave_bands_hz": list(OCTAVE_BANDS_HZ),
         "max_audio_seconds": MAX_AUDIO_SECONDS,
-        "upload_format": "wav",
+        "upload_formats": ["wav", "m4a", "mp3"],
     }
 
 

@@ -1,76 +1,61 @@
-# Simulador acústico web — versión funcional local
+# Simulador acústico web · v3
 
-Esta versión conecta el frontend HTML/CSS/JavaScript con el motor científico
-`pyroomacoustics` mediante FastAPI.
+Aplicación web de acústica de recintos basada en **FastAPI + pyroomacoustics**. La interfaz no implementa un segundo modelo acústico en JavaScript: toda RIR, EDC, métrica y auralización se calcula en Python.
 
-## Arquitectura
+## Novedades de v3
 
-```text
-Navegador
-   │
-   ├─ HTML/CSS/JS  (interfaz, reproducción y gráficas)
-   │
-   └─ /api/simulate
-          │
-          ▼
-      FastAPI
-          │
-          ▼
-   acoustic_engine.py
-          │
-          ▼
-   pyroomacoustics + SciPy + NumPy
-```
+- Presets de **tipo de recinto** recuperados de la consola web original.
+- Presets didácticos de **coeficiente de absorción uniforme**.
+- Geometría de fuente y cinco receptores escalada proporcionalmente para permitir recintos pequeños y grandes, conservando exactamente el caso 18 × 30 × 7.5 m del modelo de referencia.
+- Visualización ampliada de EDT, T20, T30, C50, C80 y D50 mediante barras alimentadas por los resultados reales de la API.
+- Laboratorio **A/B**: dos simulaciones pyroomacoustics independientes con EDC superpuestas, tabla de diferencias y audio procesado para A y B.
+- Se mantiene la selección de voz, saxofón o audio propio en WAV/M4A/MP3, RIR, EDC, teoría y metodología.
 
-El frontend **no calcula reverberación en JavaScript**.
+> Los nombres de materiales de los presets son escenarios didácticos asociados a un único α uniforme. No sustituyen coeficientes de absorción por bandas de octava medidos para materiales reales.
 
-## Ejecutar en Windows
-
-1. Abre PowerShell en esta carpeta.
-2. Ejecuta:
+## Ejecutar localmente
 
 ```powershell
 uv sync
-```
-
-3. Inicia la aplicación:
-
-```powershell
 uv run uvicorn app.api:app --host 127.0.0.1 --port 8000
 ```
 
-También puedes ejecutar `run_local.ps1` o `run_local.bat`.
+Abrir: `http://127.0.0.1:8000`
 
-4. Abre:
+También puedes usar `run_local.bat` o `run_local.ps1`.
+
+## Cloud Run
+
+El servicio debe iniciar con:
 
 ```text
-http://127.0.0.1:8000
+uvicorn app.api:app --host 0.0.0.0 --port 8080
 ```
 
-No uses `python -m http.server` para esta versión: ese comando sirve solo el
-frontend y no inicia la API Python.
+Si Cloud Build está conectado a la rama `main`, un `git push` a `main` genera una nueva revisión automáticamente. Para desarrollo, trabajar primero en una rama como `feature/v3-interface`.
 
-## Audio
+## Estructura
 
-- Voz humana: audio de ejemplo original, descargado y almacenado en caché la
-  primera vez que se simula.
-- Saxofón: mismo comportamiento.
-- Audio propio: primera versión limitada a WAV para mantener una cadena de
-  decodificación reproducible con SciPy.
-- Límite de prototipo: 25 MB / 60 s.
+```text
+app/
+  acoustic_engine.py   motor científico
+  api.py               API FastAPI
+web/
+  index.html
+  styles.css
+  app.js               simulación principal
+  presets.js           datos de escenarios
+  v3.js                 presets, barras y comparación A/B
+tests/
+```
 
-## Endpoints
+## Validación
 
-- `GET /api/health`
-- `POST /api/simulate`
-- `GET /api/results/{id}/processed.wav`
+La suite incluye pruebas de:
 
-## Consistencia científica
-
-La API usa `legacy_recompute_rir=False`: el audio auralizado, la RIR, la EDC y
-las métricas provienen de la **misma realización acústica**. Esto evita la
-segunda llamada estocástica a `compute_rir()` detectada en el Marimo original.
-
-## Correccion v2: reproductor de audio procesado
-
-Esta revision corrige un problema de interfaz de la primera entrega: la capa de espera del reproductor podia permanecer visible aunque la API ya hubiera generado `processed.wav`. El frontend ahora descarga explicitamente el resultado, verifica que contenga datos, lo convierte a un `Blob` `audio/wav` y solo entonces habilita visualmente el reproductor. El endpoint del WAV se entrega ademas con disposicion `inline` y sin cache.
+- preprocesamiento de audio;
+- geometría del caso de referencia;
+- equivalencia del análisis extraído con las ecuaciones legacy;
+- geometría escalada dentro de un recinto pequeño;
+- entrega de WAV reproducible por la API;
+- aceptación de presets de recintos pequeños por la API.

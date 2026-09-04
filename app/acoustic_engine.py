@@ -78,23 +78,31 @@ def preprocess_audio(audio: np.ndarray) -> np.ndarray:
 
 
 def source_location(config: RoomConfig) -> np.ndarray:
-    """Return the source position used by the current notebook."""
+    """Return a room-scaled source position that reproduces the notebook default."""
 
-    return np.array([config.width_m / 2.0, 4.0, 1.5], dtype=float)
+    return np.array([
+        0.50 * config.width_m,
+        (4.0 / 30.0) * config.length_m,
+        min(1.5, 0.50 * config.height_m),
+    ], dtype=float)
 
 
 def receiver_locations(config: RoomConfig) -> np.ndarray:
-    """Return the five receiver positions used by the current notebook.
+    """Return five room-scaled receiver positions.
 
-    Shape is (3, n_receivers), matching pyroomacoustics.MicrophoneArray.
+    The normalized coordinates reproduce the original Marimo positions for the
+    18 x 30 x 7.5 m reference room while keeping all receivers inside smaller
+    and larger presets. Shape is (3, n_receivers), matching
+    pyroomacoustics.MicrophoneArray.
     """
 
+    z = min(1.2, 0.40 * config.height_m)
     seats = [
-        [4.0, 10.0, 1.2],
-        [config.width_m - 4.0, 12.0, 1.2],
-        [config.width_m / 2.0, 18.0, 1.2],
-        [5.0, config.length_m - 5.0, 1.2],
-        [config.width_m - 5.0, config.length_m - 4.0, 1.2],
+        [(4.0 / 18.0) * config.width_m, (10.0 / 30.0) * config.length_m, z],
+        [(14.0 / 18.0) * config.width_m, (12.0 / 30.0) * config.length_m, z],
+        [0.50 * config.width_m, (18.0 / 30.0) * config.length_m, z],
+        [(5.0 / 18.0) * config.width_m, (25.0 / 30.0) * config.length_m, z],
+        [(13.0 / 18.0) * config.width_m, (26.0 / 30.0) * config.length_m, z],
     ]
     return np.asarray(seats, dtype=float).T
 
